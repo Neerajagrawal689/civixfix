@@ -1,0 +1,291 @@
+// Prisma schema configured for Turso (SQLite)
+// Learn more: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["driverAdapters"]
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+model User {
+  id               String          @id @default(uuid())
+  name             String
+  email            String          @unique
+  password_hash    String
+  role             String          @default("CITIZEN") // CITIZEN, OFFICER, WORKER, ADMIN
+  phone            String?
+  avatar_url       String?
+  department_id    String?
+  department       Department?     @relation(fields: [department_id], references: [id])
+  is_active        Boolean         @default(true)
+  created_at       DateTime        @default(now())
+  updated_at       DateTime        @updatedAt
+
+  reported_issues   Issue[]         @relation("CitizenIssues")
+  assigned_issues   Assignment[]    @relation("WorkerAssignments")
+  managed_issues    Assignment[]    @relation("OfficerAssignments")
+  comments          Comment[]
+  feedbacks         Feedback[]
+  supports          Support[]
+  audit_logs        AuditLog[]
+
+  notices           Notice[]        @relation("NoticeAuthor")
+  lost_and_founds   LostAndFound[]  @relation("LostFoundReporter")
+  created_polls     Poll[]          @relation("PollCreator")
+  poll_votes        PollVote[]      @relation("UserPollVotes")
+}
+
+model Department {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  is_active   Boolean  @default(true)
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+  users       User[]
+  issues      Issue[]
+}
+
+model Category {
+  id          String   @id @default(uuid())
+  name        String
+  slug        String   @unique
+  description String?
+  is_active   Boolean  @default(true)
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+  issues      Issue[]
+}
+
+model Ward {
+  id          String   @id @default(uuid())
+  name        String
+  code        String   @unique
+  boundary    String?  // Stored as JSON string since SQLite doesn't have native JSON
+  is_active   Boolean  @default(true)
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+  issues      Issue[]
+}
+
+model Issue {
+  id              String         @id @default(uuid())
+  issue_number    String         @unique
+  
+  citizen_id      String
+  citizen         User           @relation("CitizenIssues", fields: [citizen_id], references: [id])
+  
+  category_id     String
+  category        Category       @relation(fields: [category_id], references: [id])
+  
+  department_id   String?
+  department      Department?    @relation(fields: [department_id], references: [id])
+  
+  ward_id         String?
+  ward            Ward?          @relation(fields: [ward_id], references: [id])
+
+  title           String
+  description     String
+
+  latitude        Float
+  longitude       Float
+  address         String?
+
+  priority        String         @default("MEDIUM") // LOW, MEDIUM, HIGH, CRITICAL
+  status          String         @default("SUBMITTED") // SUBMITTED, UNDER_REVIEW, VERIFIED, ASSIGNED, IN_PROGRESS, RESOLVED, CITIZEN_VERIFICATION, CLOSED, REJECTED, REOPENED
+
+  ai_category     String?
+  ai_confidence   Float?
+  ai_priority     String?
+
+  final_category  String?
+  final_priority  String?
+  decision_by     String?
+
+  created_at      DateTime       @default(now())
+  updated_at      DateTime       @updatedAt
+  resolved_at     DateTime?
+  closed_at       DateTime?
+
+  images          IssueImage[]
+  assignments     Assignment[]
+  status_history  StatusHistory[]
+  comments        Comment[]
+  feedbacks       Feedback[]
+  supports        Support[]
+  
+  @@index([issue_number])
+  @@index([status])
+  @@index([category_id])
+  @@index([department_id])
+  @@index([ward_id])
+  @@index([created_at])
+}
+
+model IssueImage {
+  id           String    @id @default(uuid())
+  issue_id     String
+  issue        Issue     @relation(fields: [issue_id], references: [id])
+  url          String
+  storage_path String
+  file_type    String?
+  image_type   String    @default("REPORT") // REPORT, BEFORE, AFTER
+  created_at   DateTime  @default(now())
+}
+
+model Assignment {
+  id            String    @id @default(uuid())
+  issue_id      String
+  issue         Issue     @relation(fields: [issue_id], references: [id])
+  
+  officer_id    String
+  officer       User      @relation("OfficerAssignments", fields: [officer_id], references: [id])
+  
+  worker_id     String?
+  worker        User?     @relation("WorkerAssignments", fields: [worker_id], references: [id])
+
+  assigned_at   DateTime  @default(now())
+  accepted_at   DateTime?
+  started_at    DateTime?
+  completed_at  DateTime?
+
+  created_at    DateTime  @default(now())
+  updated_at    DateTime  @updatedAt
+}
+
+model StatusHistory {
+  id          String   @id @default(uuid())
+  issue_id    String
+  issue       Issue    @relation(fields: [issue_id], references: [id])
+  changed_by  String?  // Null if automated
+  old_status  String
+  new_status  String
+  note        String?
+  created_at  DateTime @default(now())
+}
+
+model Comment {
+  id          String   @id @default(uuid())
+  issue_id    String
+  issue       Issue    @relation(fields: [issue_id], references: [id])
+  user_id     String
+  user        User     @relation(fields: [user_id], references: [id])
+  comment     String
+  is_internal Boolean  @default(false)
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+}
+
+model Notification {
+  id          String   @id @default(uuid())
+  user_id     String
+  type        String
+  title       String
+  message     String
+  is_read     Boolean  @default(false)
+  created_at  DateTime @default(now())
+}
+
+model Feedback {
+  id          String   @id @default(uuid())
+  issue_id    String
+  issue       Issue    @relation(fields: [issue_id], references: [id])
+  citizen_id  String
+  citizen     User     @relation(fields: [citizen_id], references: [id])
+  rating      Int
+  comment     String?
+  created_at  DateTime @default(now())
+
+  @@unique([issue_id, citizen_id])
+}
+
+model Support {
+  id          String   @id @default(uuid())
+  issue_id    String
+  issue       Issue    @relation(fields: [issue_id], references: [id])
+  citizen_id  String
+  citizen     User     @relation(fields: [citizen_id], references: [id])
+  created_at  DateTime @default(now())
+
+  @@unique([issue_id, citizen_id])
+}
+
+model AuditLog {
+  id          String   @id @default(uuid())
+  user_id     String?
+  user        User?    @relation(fields: [user_id], references: [id])
+  action      String
+  entity      String
+  entity_id   String
+  metadata    String?  // Stored as JSON string
+  ip_address  String?
+  created_at  DateTime @default(now())
+}
+
+
+// ==========================================
+// NEW SMART CITY MODULES
+// ==========================================
+
+model Notice {
+  id          String   @id @default(uuid())
+  title       String
+  content     String
+  type        String   @default("INFO") // INFO, WARNING, EMERGENCY
+  author_id   String
+  author      User     @relation("NoticeAuthor", fields: [author_id], references: [id])
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+}
+
+model LostAndFound {
+  id            String   @id @default(uuid())
+  item_name     String
+  description   String
+  type          String   // LOST, FOUND
+  location      String
+  contact_info  String
+  image_url     String?
+  status        String   @default("ACTIVE") // ACTIVE, RESOLVED
+  reporter_id   String
+  reporter      User     @relation("LostFoundReporter", fields: [reporter_id], references: [id])
+  created_at    DateTime @default(now())
+  updated_at    DateTime @updatedAt
+}
+
+model Poll {
+  id          String       @id @default(uuid())
+  question    String
+  active      Boolean      @default(true)
+  creator_id  String
+  creator     User         @relation("PollCreator", fields: [creator_id], references: [id])
+  options     PollOption[]
+  votes       PollVote[]
+  created_at  DateTime     @default(now())
+  updated_at  DateTime     @updatedAt
+}
+
+model PollOption {
+  id          String     @id @default(uuid())
+  poll_id     String
+  poll        Poll       @relation(fields: [poll_id], references: [id])
+  text        String
+  votes       PollVote[]
+}
+
+model PollVote {
+  id          String     @id @default(uuid())
+  poll_id     String
+  poll        Poll       @relation(fields: [poll_id], references: [id])
+  option_id   String
+  option      PollOption @relation(fields: [option_id], references: [id])
+  user_id     String
+  user        User       @relation("UserPollVotes", fields: [user_id], references: [id])
+  created_at  DateTime   @default(now())
+
+  @@unique([poll_id, user_id]) // User can only vote once per poll
+}
