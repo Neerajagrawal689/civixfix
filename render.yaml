@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: civixfix-api
+    env: node
+    plan: free
+    rootDir: apps/api
+    buildCommand: npm install && npx prisma generate
+    startCommand: node src/server.js
+    autoDeploy: true
+    envVars:
+      - key: PORT
+        value: 10000
+      - key: TURSO_DATABASE_URL
+        sync: false
+      - key: TURSO_AUTH_TOKEN
+        sync: false
+      - key: JWT_SECRET
+        value: supersecretjwtkey
+      - key: JWT_REFRESH_SECRET
+        value: supersecretrefreshkey
+      - key: GEMINI_API_KEY
+        sync: false
